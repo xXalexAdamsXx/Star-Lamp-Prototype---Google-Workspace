@@ -5,19 +5,19 @@
  * @OnlyCurrentDoc
  */
 
-//TODO: Impliment "Last updated" and "next updated" on the leaderboard
+//TODO: Impliment "next update" on the leaderboard
 
 function processOnDemand(){
   const cell = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Approval Status').getRange('G2');
   const triggerValue = cell.getValue();
 
   if(triggerValue === true) {
-    cell.setValue(null);
+    cell.setValue("Processing... Please wait.");
     dailyRoutine(); 
   }
   
   cell.insertCheckboxes();
-  if(cell.getValue() == true) cell.setValue('CRITICAL ERROR: UN-CHECKBOX IMMEDIATELY'); //Catch the error 
+  if(cell.getValue() == true) cell.setValue('CRITICAL ERROR. Insert new checkbox'); //Catch a checkbox error 
 }
 
 /**
@@ -31,7 +31,7 @@ function dailyRoutine(){
   const ss = SpreadsheetApp.getActiveSpreadsheet(); // Get the current spreadsheet
   const approvalSheet  = ss.getSheetByName('Approval Status'); // Get the 'Approval Status' sheet
 
-  if(approvalSheet.getRange('A3').isBlank()) return;
+  //if(approvalSheet.getRange('A3').isBlank()) return;
 
   const leaderboardSheet = ss.getSheetByName('Star & Lamp Leaderboard'); // Get the 'Leaderboard' sheet
   
@@ -65,14 +65,14 @@ function dailyRoutine(){
 function pointsToLeaderboard(sheet1, sheet2) {
   // Get all the data from 'Approval Status' and 'Leaderboard' sheets at once
   const dataSheet1 = sheet1.getRange(2, 2, sheet1.getLastRow() - 1, sheet1.getLastColumn() - 2).getValues();
-  const dataSheet2 = sheet2.getRange(3, 1, sheet2.getLastRow() - 2, 1).getValues().flat();
-
+  const dataSheet2 = sheet2.getRange(3, 1, sheet2.getLastRow() - 2, sheet2.getLastColumn() - 1).getValues();
+  const dataSheet2Names = sheet2.getRange(3, 1, sheet2.getLastRow() - 2, 1).getValues().flat();
   const rowsToDelete = []; // Initialize an array to store row indices to delete
 
   for (let i = 0; i < dataSheet1.length; i++) { // Starting from 1 as header row is skipped
     const colData = dataSheet1[i];
     // Check specific criteria in 'Approval Status' sheet
-    if (colData[colData.length - 1] === true) { // Assuming the checkbox is in the last column
+    if (colData[colData.length - 1] === true) { // Assuming the checkbox is in the last column - 1
       const rowData = dataSheet1[i];
 
       // Extract specific data from the row
@@ -81,22 +81,20 @@ function pointsToLeaderboard(sheet1, sheet2) {
       const tier = rowData[3];
 
       // Update 'Leaderboard'
-      const foundIndex = binarySearch(dataSheet2, name);
+      const foundIndex = binarySearch(dataSheet2Names, name);
       if (foundIndex !== -1) {
-        const totalPointsCell = sheet2.getRange(foundIndex + 3, 2);
-        cellAddition(totalPointsCell, points);
+        dataSheet2[foundIndex][1] += points; //Add points to 'points' column
 
-        const monthlyCell = sheet2.getRange(foundIndex + 3, 6);
-        cellAddition(monthlyCell, points);
+        dataSheet2[foundIndex][5] += points; //Add points to 'monthly' column
 
-        const targetColumn = tier === 'Tier 1' ? 3 : (tier === 'Tier 2' ? 4 : 5);
-        const tierCell = sheet2.getRange(foundIndex + 3, targetColumn);
-        cellAddition(tierCell, points);
+        const targetColumn = tier === 'Tier 1' ? 2 : (tier === 'Tier 2' ? 3 : 4);
+        dataSheet2[foundIndex][targetColumn] += points; //Add points to 'monthly' column
       }
 
       rowsToDelete.push(i + 2); // Store row indices to delete, incrementing by 1 to account for header row
     }
   }
+  sheet2.getRange(3, 1, sheet2.getLastRow() - 2, sheet2.getLastColumn() - 1).setValues(dataSheet2);
   return rowsToDelete;
 }
 
