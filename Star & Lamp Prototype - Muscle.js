@@ -5,6 +5,12 @@
  * @OnlyCurrentDoc
  */
 
+/**
+ * KNOWN BUGS
+ * -Sheet is full.
+ *   -When the sheet is full, the line that deletes data in bulk within the dailyRoutine() function can break no matter what parameters are passed through it
+ */
+
 //TODO: Impliment "next update" on the leaderboard
 
 function processOnDemand(){
@@ -30,25 +36,26 @@ function processOnDemand(){
 function dailyRoutine(){
   const ss = SpreadsheetApp.getActiveSpreadsheet(); // Get the current spreadsheet
   const approvalSheet  = ss.getSheetByName('Approval Status'); // Get the 'Approval Status' sheet
+  
+  //appendBlankRow(approvalSheet); This line serves as a quick fix to a bug that occurs when the google sheet is full. Doesn't work as intended though
 
-  //if(approvalSheet.getRange('A3').isBlank()) return;
+  if(approvalSheet.getRange('A3').isBlank()) return;
 
   const leaderboardSheet = ss.getSheetByName('Star & Lamp Leaderboard'); // Get the 'Leaderboard' sheet
   
-  //Sort to alphabetical order to enable binary search
+  //Sort alphabetically to enable binary search
   const NAME_COLUMN = 1;
   leaderboardSheet.getRange(3, 1, leaderboardSheet.getLastRow() - 1, leaderboardSheet.getLastColumn() - 1).activate().sort({column: NAME_COLUMN, ascending: true});
 
   // Execute pointsToLeaderboard and identify rows to delete in the 'Approval Status' sheet
+  const APPROVAL_COLUMN = 6;
   let rowsToDelete = pointsToLeaderboard(approvalSheet, leaderboardSheet);
 
-  // Delete identified rows from the 'Approval Status' sheet
-  while(rowsToDelete.length != 0){
-    approvalSheet.deleteRows(rowsToDelete.pop());
-  }
-
+  // Delete identified rows from the 'Approval Status' sheet by sorting and then deleting in bulk
+  if(rowsToDelete > 0) approvalSheet.deleteRows(3, rowsToDelete);
+  
   // Sort the 'Leaderboard' sheet based on the values in the 'Total Points' column
-  const TOTAL_POINTS_COLUMN = 2
+  const TOTAL_POINTS_COLUMN = 2;
   leaderboardSheet.getRange(3, 1, leaderboardSheet.getLastRow() - 1, leaderboardSheet.getLastColumn() - 1).activate().sort({column: TOTAL_POINTS_COLUMN, ascending: false});
 
   //Update the timestamp cell in the 'Leaderboard' sheet
@@ -58,21 +65,25 @@ function dailyRoutine(){
 
 /**
  * Identifies rows in the 'Approval Status' sheet to delete and updates data in the 'Leaderboard'.
- * @param sheet1 {Sheet} - The 'Approval Status' sheet.
- * @param sheet2 {Sheet} - The 'Leaderboard' sheet.
+ * @param {Sheet} sheet1 - The 'Approval Status' sheet.
+ * @param {Sheet} sheet2 - The 'Leaderboard' sheet.
  * @returns {Array} - Array containing row indices in the 'Approval Status' sheet to delete.
  */
 function pointsToLeaderboard(sheet1, sheet2) {
   // Get all the data from 'Approval Status' and 'Leaderboard' sheets at once
-  const dataSheet1 = sheet1.getRange(2, 2, sheet1.getLastRow() - 1, sheet1.getLastColumn() - 2).getValues();
+  const dataSheet1 = sheet1.getRange(3, 2, sheet1.getLastRow() - 1, sheet1.getLastColumn() - 2).getValues();
   const dataSheet2 = sheet2.getRange(3, 1, sheet2.getLastRow() - 2, sheet2.getLastColumn() - 1).getValues();
   const dataSheet2Names = sheet2.getRange(3, 1, sheet2.getLastRow() - 2, 1).getValues().flat();
-  const rowsToDelete = []; // Initialize an array to store row indices to delete
+  let rowsToDelete = 0; // Initialize an integer to store row indices to delete
 
-  for (let i = 0; i < dataSheet1.length; i++) { // Starting from 1 as header row is skipped
+  console.log(dataSheet1[0][4]);
+  // Traverse dataSheet1 and search for 
+  for (let i = 0; i < dataSheet1.length && dataSheet1[i][4] != undefined; i++) {
     const colData = dataSheet1[i];
-    // Check specific criteria in 'Approval Status' sheet
-    if (colData[colData.length - 1] === true) { // Assuming the checkbox is in the last column - 1
+
+    // Check specific approval status in 'Approval Status' sheet
+    if(colData[colData.length - 1] === 'Disapproved') rowsToDelete++; //Increment by 1 each time an approved or disapproved row is read
+    if (colData[colData.length - 1] === 'Approved') { // Assuming the checkbox is in the last column - 1
       const rowData = dataSheet1[i];
 
       // Extract specific data from the row
@@ -83,16 +94,16 @@ function pointsToLeaderboard(sheet1, sheet2) {
       // Update 'Leaderboard'
       const foundIndex = binarySearch(dataSheet2Names, name);
       if (foundIndex !== -1) {
-        dataSheet2[foundIndex][1] += points; //Add points to 'points' column
+        dataSheet2[foundIndex][1] += points; //Add points to 'monthly' column
 
-        dataSheet2[foundIndex][5] += points; //Add points to 'monthly' column
+        dataSheet2[foundIndex][5] += points; //Add points to 'total points' column
 
         const targetColumn = tier === 'Tier 1' ? 2 : (tier === 'Tier 2' ? 3 : 4);
         dataSheet2[foundIndex][targetColumn] += points; //Add points to 'monthly' column
       }
 
-      rowsToDelete.push(i + 2); // Store row indices to delete, incrementing by 1 to account for header row
-    }
+      rowsToDelete++; // Store row indices to delete, incrementing by 1 each time an approved or disapproved row is read
+    } 
   }
   sheet2.getRange(3, 1, sheet2.getLastRow() - 2, sheet2.getLastColumn() - 1).setValues(dataSheet2);
   return rowsToDelete;
@@ -100,13 +111,19 @@ function pointsToLeaderboard(sheet1, sheet2) {
 
 /**
  * Adds a value to the existing value in a cell.
- * @param cell {Range} - The cell to update.
- * @param value {*} - The value to add to the cell.
+ * @param {Range} cell - The cell to update.
+ * @param {*} value - The value to add to the cell.
  */
 function cellAddition(cell, value) {
   cell.setValue(cell.getValue() + value);
 }
 
+/**
+ * Updates the timestamp cell in the specified sheet with the current date and time.
+ * @param {Sheet} sheet - The target sheet to update the timestamp.
+ * @param {string} cellCoordinates - The cell coordinates for the timestamp (e.g., 'A1', 'B2').
+ * @returns {void} - Does not return a value. Updates the cell value directly.
+ */
 function updateTimeStamp(sheet, cellCoordinates){
   const timeStampCell = sheet.getRange(cellCoordinates); //Retrieve the 'timestamp cell' form the leaderboard sheet
   const TIME_ZONE = 'America/Los_Angeles'; //Get the current timezone
@@ -115,7 +132,13 @@ function updateTimeStamp(sheet, cellCoordinates){
   timeStampCell.setValue('Last Updated: \n' + formattedDate); //Update the cell value;
 }
 
-
+/**
+ * Performs a binary search on a sorted array of values and returns the index of the target value.
+ * 
+ * @param {Array} sortedArray - The array sorted in ascending order to search.
+ * @param {*} target - The target value to search for within the array.
+ * @returns {number} - The index of the target value in the array. Returns -1 if not found.
+ */
 function binarySearch(sortedArray, target) {
   let left = 0;
   let right = sortedArray.length - 1;
@@ -134,4 +157,16 @@ function binarySearch(sortedArray, target) {
   }
 
   return -1; // Target not found in the array
+}
+
+/**
+ * Appends a single blank row at the end of the specified sheet.
+ * 
+ * @param {Sheet} sheet - The Google Sheets object representing the sheet.
+ * @returns {void} - No return value.
+ */
+function appendBlankRow(sheet) {
+  const lastRow = sheet.getLastRow();
+  // Append a blank row
+  sheet.insertRowsAfter(lastRow, 1);
 }
