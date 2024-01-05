@@ -5,12 +5,6 @@
  * @OnlyCurrentDoc
  */
 
-/**
- * KNOWN BUGS
- * -Sheet is full.
- *   -When the sheet is full, the line that deletes data in bulk within the dailyRoutine() function can break no matter what parameters are passed through it
- */
-
 //TODO: Impliment "next update" on the leaderboard
 
 function processOnDemand(){
@@ -49,6 +43,7 @@ function dailyRoutine(){
 
   // Execute pointsToLeaderboard and identify rows to delete in the 'Approval Status' sheet
   const APPROVAL_COLUMN = 6;
+  approvalSheet.getRange(3, 1, approvalSheet.getLastRow() - 1, approvalSheet.getLastColumn() - 1).activate().sort({column: APPROVAL_COLUMN, ascending: true});
   let rowsToDelete = pointsToLeaderboard(approvalSheet, leaderboardSheet);
 
   // Delete identified rows from the 'Approval Status' sheet by sorting and then deleting in bulk
@@ -60,13 +55,13 @@ function dailyRoutine(){
 
   //Update the timestamp cell in the 'Leaderboard' sheet
   const TIME_STAMP_CORDS = 'G1';
-  updateTimeStamp(leaderboardSheet, TIME_STAMP_CORDS);
+  updateTimeStamp(leaderboardSheet, TIME_STAMP_CORDS, 'America/Los_Angeles');
 }
 
 /**
  * Identifies rows in the 'Approval Status' sheet to delete and updates data in the 'Leaderboard'.
- * @param {Sheet} sheet1 - The 'Approval Status' sheet.
- * @param {Sheet} sheet2 - The 'Leaderboard' sheet.
+ * @param sheet1 {Sheet} - The 'Approval Status' sheet.
+ * @param sheet2 {Sheet} - The 'Leaderboard' sheet.
  * @returns {Array} - Array containing row indices in the 'Approval Status' sheet to delete.
  */
 function pointsToLeaderboard(sheet1, sheet2) {
@@ -111,34 +106,20 @@ function pointsToLeaderboard(sheet1, sheet2) {
 
 /**
  * Adds a value to the existing value in a cell.
- * @param {Range} cell - The cell to update.
- * @param {*} value - The value to add to the cell.
+ * @param cell {Range} - The cell to update.
+ * @param value {*} - The value to add to the cell.
  */
 function cellAddition(cell, value) {
   cell.setValue(cell.getValue() + value);
 }
 
-/**
- * Updates the timestamp cell in the specified sheet with the current date and time.
- * @param {Sheet} sheet - The target sheet to update the timestamp.
- * @param {string} cellCoordinates - The cell coordinates for the timestamp (e.g., 'A1', 'B2').
- * @returns {void} - Does not return a value. Updates the cell value directly.
- */
-function updateTimeStamp(sheet, cellCoordinates){
+function updateTimeStamp(sheet, cellCoordinates, timeZone){
   const timeStampCell = sheet.getRange(cellCoordinates); //Retrieve the 'timestamp cell' form the leaderboard sheet
-  const TIME_ZONE = 'America/Los_Angeles'; //Get the current timezone
   const currentDate = new Date(); //Get the current date
-  const formattedDate = Utilities.formatDate(currentDate, TIME_ZONE, 'MM/dd/yyyy HH:mm'); //Format the data to be more user friendly
+  const formattedDate = Utilities.formatDate(currentDate, timeZone, 'MM/dd/yyyy HH:mm'); //Format the data to be more user friendly
   timeStampCell.setValue('Last Updated: \n' + formattedDate); //Update the cell value;
 }
 
-/**
- * Performs a binary search on a sorted array of values and returns the index of the target value.
- * 
- * @param {Array} sortedArray - The array sorted in ascending order to search.
- * @param {*} target - The target value to search for within the array.
- * @returns {number} - The index of the target value in the array. Returns -1 if not found.
- */
 function binarySearch(sortedArray, target) {
   let left = 0;
   let right = sortedArray.length - 1;
@@ -159,12 +140,6 @@ function binarySearch(sortedArray, target) {
   return -1; // Target not found in the array
 }
 
-/**
- * Appends a single blank row at the end of the specified sheet.
- * 
- * @param {Sheet} sheet - The Google Sheets object representing the sheet.
- * @returns {void} - No return value.
- */
 function appendBlankRow(sheet) {
   const lastRow = sheet.getLastRow();
   // Append a blank row
