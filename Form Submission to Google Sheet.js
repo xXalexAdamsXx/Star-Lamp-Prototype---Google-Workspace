@@ -1,16 +1,17 @@
 function onFormSubmit(e){
   //Save the reference to the form and sheet
-  const formURL = 'https://docs.google.com/forms/d/1UTXp1hNrn6XuY0qDNysSiUI6v0DAyyvkyl5kSQ5IgQo/edit'
-  const spreadSheetURL = 'https://docs.google.com/spreadsheets/d/1Tluj63-N1tG7uEfc3zAq44x_DzYeLEGvLgTsDlTMNM4/edit?resourcekey#gid=1815354714';
-  const sheetName = 'Approval Status';
-  const form = FormApp.openByUrl(formURL);
-  const sheet = SpreadsheetApp.openByUrl(spreadSheetURL).getSheetByName(sheetName);
+  const form = FormApp.getActiveForm(); //Dynamically retrieve the form reference
+  const spreadSheet = SpreadsheetApp.openById(form.getDestinationId()); //Dynamically retrieve the Spreadsheet reference
+  const sheet = spreadSheet.getSheetByName('Approval Status'); //The only constart part of this. The name of the sheets cannot be changed
 
   //Append answers to approval sheet
   let rowsToAdd = extractAnswers(form); //Extract the response data
-  sheet.getRange(3,1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+  const startingRow = sheet.getLastRow() + 1;
+  const numRows = rowsToAdd.length;
+  const numColumns = rowsToAdd[0].length;
+  sheet.getRange(startingRow, 1, numRows, numColumns).setValues(rowsToAdd);
   
-  const dropDownCells = sheet.getRange(3, rowsToAdd[0].length + 1, rowsToAdd.length, 1);
+  const dropDownCells = sheet.getRange(startingRow, rowsToAdd[0].length + 1, rowsToAdd.length, 1);
   createDropDown(dropDownCells, sheet);
 }
 
@@ -22,31 +23,53 @@ function onFormSubmit(e){
  * @param formObject {Form} - The google form from which answers will be extracted from
  * @return {Array} - An array with all of the answers
  */
-function extractAnswers(formObject) {
+function extractAnswers(formObject){
   const responses = formObject.getResponses(); //Get the array with all of the form response objects
   const latestResponse = responses[responses.length - 1]; //Extract the latest form response object
-  const timeStamp = latestResponse.getTimestamp(); // Store timestamp as the first element in the allResponses array
+  const timeStamp = extractTimeStamp(latestResponse, "MM/dd/yyyy HH:mm:ss");
 
   const responseItems = latestResponse.getItemResponses(); //Get a list of the question responses from the individual form response
   const allAnswers = responseItems.map(responseItem => responseItem.getResponse()); //Store all of the answers
   const allNames = allAnswers[0];
-  const namesWithAnswers = compileNamesWithResponsesAndTime(timeStamp, allNames, allAnswers);  // Concatenate the arrays to include the timestamp and all the answers in a single array
+  const namesWithAnswers = compileNamesWithResponsesAndTime(timeStamp, allNames, allAnswers); // Concatenate the arrays to include the timestamp and all the answers in a single array
   return namesWithAnswers;
 }
 
-function compileNamesWithResponsesAndTime(timeStamp, names, answers){
-  let namesWithResponses = []; //Initialize an array that will store the name and responses
-  let timeWithNamesAndResponses = []; //Initialize an array that will store timestamp, names, and all responses
-  for(let i = 0; i < names.length; i++){
-    timeWithNamesAndResponses[i] = []; //Initialize index i of the array with an empty array (This makes it a 2D array)
-    timeWithNamesAndResponses[i][0] = timeStamp; //Store the time stamp in the first slot of the array in slot i of the 2D array
-    namesWithResponses = answers.slice(); //Store a copy of all the answers in the temporary array
-    namesWithResponses[0] = names[i]; //Replace the first slot in the array with a name
-    timeWithNamesAndResponses[i] = timeWithNamesAndResponses[i].concat(namesWithResponses); //Concatinate the timestamp with other array
+/**
+ * Compiles names, responses, and timestamp into a 2D array.
+ * @param {string} timeStamp - The timestamp to be associated with the responses.
+ * @param {string[]} names - An array of names corresponding to the responses.
+ * @param {string[]} answers - An array of responses corresponding to the names.
+ * @returns {string[][]} - A 2D array containing timestamp, names, and responses.
+ */
+function compileNamesWithResponsesAndTime(timeStamp, names, answers) {
+  let namesWithResponses = []; // Initialize an array that will store the name and responses
+  let timeWithNamesAndResponses = []; // Initialize an array that will store timestamp, names, and all responses
+
+  for (let i = 0; i < names.length; i++) {
+    timeWithNamesAndResponses[i] = []; // Initialize index i of the array with an empty array (This makes it a 2D array)
+    timeWithNamesAndResponses[i][0] = timeStamp; // Store the timestamp in the first column of the array in row i of the 2D array
+
+    namesWithResponses = answers.slice(); // Store a copy of all the answers in the temporary array
+    namesWithResponses[0] = names[i]; // Replace the first slot in the array with a name
+
+    timeWithNamesAndResponses[i] = timeWithNamesAndResponses[i].concat(namesWithResponses); // Concatenate the timestamp with other array
   }
+
   return timeWithNamesAndResponses;
 }
 
+/**
+ * Extracts and formats a timestamp from a given response object.
+ * @param {Object} responseObject - The response object containing the timestamp.
+ * @param {String} formatString - The format the timestamp will follow.
+ * @returns {string} - Formatted timestamp.
+ */
+function extractTimeStamp(responseObject, formatString) {
+  const localTime = Session.getScriptTimeZone(); // Get the local time
+  const date = responseObject.getTimestamp(); // Retrieve timestamp object
+  return Utilities.formatDate(date, localTime, formatString); // Ensure correct date formatting
+}
 
 /**
  * Creates a dropdown list in the specified target cell on the provided sheet.
@@ -55,7 +78,7 @@ function compileNamesWithResponsesAndTime(timeStamp, names, answers){
  * @returns {void} - Does not return a value. Adds dropdown functionality to the specified cell.
  */
 function createDropDown(targetCell) {
-    var rule1 = SpreadsheetApp.newDataValidation()
+    const rule1 = SpreadsheetApp.newDataValidation()
     .setAllowInvalid(false)
     .requireValueInList(['Approved', 'Disapproved'], true)
     .build();

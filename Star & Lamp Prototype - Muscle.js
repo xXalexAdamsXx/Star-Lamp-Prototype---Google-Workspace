@@ -6,6 +6,12 @@
  */
 
 //TODO: Impliment "next update" on the leaderboard
+/*
+  Known bugs:
+    - When the final row is occupied with data in the approval sheet, sending data to the leaderboard becomes really busted.
+      - A fix would be to append a blank row, but that just does not work right now
+      
+*/
 
 function processOnDemand(){
   const cell = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Approval Status').getRange('G2');
@@ -31,7 +37,8 @@ function dailyRoutine(){
   const ss = SpreadsheetApp.getActiveSpreadsheet(); // Get the current spreadsheet
   const approvalSheet  = ss.getSheetByName('Approval Status'); // Get the 'Approval Status' sheet
   
-  //appendBlankRow(approvalSheet); This line serves as a quick fix to a bug that occurs when the google sheet is full. Doesn't work as intended though
+  //This line serves as a quick fix to a bug that occurs when the google sheet is full. Doesn't work as intended though
+  //appendBlankRow(approvalSheet); 
 
   if(approvalSheet.getRange('A3').isBlank()) return;
 
@@ -113,13 +120,35 @@ function cellAddition(cell, value) {
   cell.setValue(cell.getValue() + value);
 }
 
-function updateTimeStamp(sheet, cellCoordinates, timeZone){
-  const timeStampCell = sheet.getRange(cellCoordinates); //Retrieve the 'timestamp cell' form the leaderboard sheet
-  const currentDate = new Date(); //Get the current date
-  const formattedDate = Utilities.formatDate(currentDate, timeZone, 'MM/dd/yyyy HH:mm'); //Format the data to be more user friendly
-  timeStampCell.setValue('Last Updated: \n' + formattedDate); //Update the cell value;
+/**
+ * Updates a timestamp cell in a Google Sheet with the current date and time.
+ *
+ * This function retrieves a specified cell on the sheet, gets the current date and time,
+ * formats it to be more user-friendly, and updates the cell with the timestamp information.
+ *
+ * @param {Sheet} sheet - The Google Sheet object where the timestamp cell is located.
+ * @param {string} cellCoordinates - The cell coordinates (e.g., 'A1') indicating the timestamp cell.
+ * @param {string} timeZone - The time zone to use for formatting the timestamp.
+ * @returns {void} - Does not return a value. Updates the specified cell with the formatted timestamp.
+ */
+function updateTimeStamp(sheet, cellCoordinates, timeZone) {
+  const timeStampCell = sheet.getRange(cellCoordinates); // Retrieve the 'timestamp cell' from the sheet
+  const currentDate = new Date(); // Get the current date
+  const formattedDate = Utilities.formatDate(currentDate, timeZone, 'MM/dd/yyyy HH:mm'); // Format the data to be more user-friendly
+  timeStampCell.setValue('Last Updated: \n' + formattedDate); // Update the cell value
 }
 
+/**
+ * Performs binary search on a sorted array to find the index of a target element.
+ *
+ * This function takes a sorted array and a target element, and performs a binary search to find
+ * the index of the target element in the array. If the target is found, it returns the index;
+ * otherwise, it returns -1.
+ *
+ * @param {Array} sortedArray - The sorted array to be searched.
+ * @param {*} target - The target element to find in the array.
+ * @returns {number} - The index of the target element in the array, or -1 if not found.
+ */
 function binarySearch(sortedArray, target) {
   let left = 0;
   let right = sortedArray.length - 1;
@@ -141,7 +170,9 @@ function binarySearch(sortedArray, target) {
 }
 
 function appendBlankRow(sheet) {
-  const lastRow = sheet.getLastRow();
-  // Append a blank row
-  sheet.insertRowsAfter(lastRow, 1);
+  const lastColumn = sheet.getMaxColumns();
+  const lastRow = sheet.getMaxRows();
+  const blankRow = new Array(lastColumn).fill(undefined);
+  sheet.appendRow(blankRow);
+  sheet.getRange(lastRow, 1, 1, lastColumn).setValues([blankRow]);
 }
